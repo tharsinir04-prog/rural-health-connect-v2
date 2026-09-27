@@ -1,0 +1,10 @@
+import {useEffect,useRef,useState} from "react";
+import {io} from "socket.io-client";
+export default function Consultation({consultationId}:{consultationId:number}){
+ const local=useRef<HTMLVideoElement>(null),remote=useRef<HTMLVideoElement>(null);
+ const pc=useRef<RTCPeerConnection|null>(null); const socket=useRef<any>(null);
+ const [started,setStarted]=useState(false),[low,setLow]=useState(false);
+ useEffect(()=>{socket.current=io(import.meta.env.VITE_SOCKET_URL||"http://localhost:4000");socket.current.emit("consultation:join",consultationId);socket.current.on("webrtc:signal",async (d:any)=>{if(!pc.current)return;if(d.type==="offer"){await pc.current.setRemoteDescription(d);const a=await pc.current.createAnswer();await pc.current.setLocalDescription(a);socket.current.emit("webrtc:signal",{consultationId,payload:pc.current.localDescription})}else if(d.type==="answer")await pc.current.setRemoteDescription(d);else if(d.candidate)await pc.current.addIceCandidate(d.candidate)});return()=>socket.current?.disconnect()},[consultationId]);
+ async function start(){const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:!low});if(local.current)local.current.srcObject=stream;const p=new RTCPeerConnection();pc.current=p;p.onicecandidate=e=>e.candidate&&socket.current.emit("webrtc:signal",{consultationId,payload:{candidate:e.candidate}});p.ontrack=e=>{if(remote.current)remote.current.srcObject=e.streams[0]};stream.getTracks().forEach(t=>p.addTrack(t,stream));const offer=await p.createOffer();await p.setLocalDescription(offer);socket.current.emit("webrtc:signal",{consultationId,payload:p.localDescription});setStarted(true)}
+ return <div className="card"><h3>Consultation</h3><label><input type="checkbox" checked={low} onChange={e=>setLow(e.target.checked)}/> Low-data mode</label><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><video ref={local} autoPlay muted playsInline/><video ref={remote} autoPlay playsInline/></div><button onClick={start} disabled={started}>{started?"Connected":"Start call"}</button></div>
+}

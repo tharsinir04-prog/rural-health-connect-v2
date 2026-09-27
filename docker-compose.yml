@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rhc
+      POSTGRES_PASSWORD: rhc_password
+      POSTGRES_DB: rural_health_connect
+    ports:
+      - "5432:5432"
+    volumes:
+      - rhc_postgres:/var/lib/postgresql/data
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://rhc:rhc_password@postgres:5432/rural_health_connect
+      JWT_SECRET: change-this-in-production
+      PORT: 4000
+      CLIENT_ORIGIN: http://localhost:5173
+    depends_on:
+      - postgres
+    ports:
+      - "4000:4000"
+
+volumes:
+  rhc_postgres:

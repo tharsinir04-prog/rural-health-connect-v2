@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+enum Role {
+  PATIENT
+  ASHA
+  DOCTOR
+  ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum Availability {
+  AVAILABLE
+  BUSY
+  OFFLINE
+}
+
+enum ReferralStatus {
+  CREATED
+  ACCEPTED
+  PENDING
+  DELAYED
+  ARRIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum StockStatus {
+  AVAILABLE
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum EmergencyStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  CANCELLED
+}
+
+model User {
+  id Int @id @default(autoincrement())
+  email String @unique
+  passwordHash String
+  name String
+  role Role
+  phone String?
+  language String @default("en")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient?
+  asha ASHAWorker?
+  doctor Doctor?
+  auditLogs AuditLog[]
+  notifications Notification[]
+}
+
+model Patient {
+  id Int @id @default(autoincrement())
+  userId Int? @unique
+  patientCode String @unique
+  age Int?
+  gender String?
+  village String?
+  bloodGroup String?
+  allergies String?
+  emergencyContact String?
+  user User? @relation(fields:[userId],references:[id])
+  records HealthRecord[]
+  history MedicalHistory[]
+  prescriptions Prescription[]
+  appointments Appointment[]
+  reminders Reminder[]
+  vaccinations Vaccination[]
+  emergencies EmergencyRequest[]
+  referrals Referral[]
+  consultations Consultation[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([village])
+}
+
+model ASHAWorker {
+  id Int @id @default(autoincrement())
+  userId Int @unique
+  village String?
+  user User @relation(fields:[userId],references:[id])
+}
+
+model Doctor {
+  id Int @id @default(autoincrement())
+  userId Int @unique
+  specialty String
+  availability Availability @default(OFFLINE)
+  user User @relation(fields:[userId],references:[id])
+  appointments Appointment[]
+  consultations Consultation[]
+  prescriptions Prescription[]
+  referrals Referral[]
+  @@index([specialty,availability])
+}
+
+model HealthRecord {
+  id Int @id @default(autoincrement())
+  patientId Int
+  authorId Int?
+  symptoms String?
+  diagnosisNotes String?
+  vitals Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade)
+  @@index([patientId,createdAt])
+}
+
+model MedicalHistory {
+  id Int @id @default(autoincrement())
+  patientId Int
+  condition String
+  notes String?
+  createdAt DateTime @default(now())
+  patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade)
+}
+
+model Prescription {
+  id Int @id @default(autoincrement())
+  patientId Int
+  doctorId Int
+  medicines Json
+  notes String?
+  createdAt DateTime @default(now())
+  patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade)
+  doctor Doctor @relation(fields:[doctorId],references:[id])
+}
+
+model Appointment {
+  id Int @id @default(autoincrement())
+  patientId Int
+  doctorId Int
+  date DateTime
+  reason String?
+  status AppointmentStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade)
+  doctor Doctor @relation(fields:[doctorId],references:[id])
+  consultation Consultation?
+  @@index([doctorId,date])
+  @@index([patientId,date])
+}
+
+model Consultation {
+  id Int @id @default(autoincrement())
+  appointmentId Int @unique
+  patientId Int
+  doctorId Int
+  startedAt DateTime?
+  endedAt DateTime?
+  notes String?
+  mode String @default("VIDEO")
+  appointment Appointment @relation(fields:[appointmentId],references:[id],onDelete:Cascade)
+  doctor Doctor @relation(fields:[doctorId],references:[id])
+  patient Patient @relation(fields:[patientId],references:[id])
+}
+
+model PHC {
+  id Int @id @default(autoincrement())
+  name String
+  latitude Float
+  longitude Float
+  phone String?
+  services Json?
+  hospitals Hospital[]
+  referralsFrom Referral[] @relation("referringPhc")
+  referralsTo Referral[] @relation("receivingPhc")
+}
+
+model Hospital {
+  id Int @id @default(autoincrement())
+  name String
+  latitude Float
+  longitude Float
+  phone String?
+  services Json?
+  phcId Int?
+  phc PHC? @relation(fields:[phcId],references:[id])
+}
+
+model Pharmacy {
+  id Int @id @default(autoincrement())
+  name String
+  latitude Float
+  longitude Float
+  phone String?
+  stock MedicineStock[]
+}
+
+model Ambulance {
+  id Int @id @default(autoincrement())
+  name String
+  phone String
+  latitude Float
+  longitude Float
+}
+
+model Medicine {
+  id Int @id @default(autoincrement())
+  name String @unique
+  stock MedicineStock[]
+}
+
+model MedicineStock {
+  id Int @id @default(autoincrement())
+  medicineId Int
+  pharmacyId Int
+  quantity Int @default(0)
+  status StockStatus @default(OUT_OF_STOCK)
+  updatedAt DateTime @updatedAt
+  medicine Medicine @relation(fields:[medicineId],references:[id],onDelete:Cascade)
+  pharmacy Pharmacy @relation(fields:[pharmacyId],references:[id],onDelete:Cascade)
+  @@unique([medicineId,pharmacyId])
+}
+
+model GovernmentScheme {
+  id Int @id @default(autoincrement())
+  name String
+  description String
+  eligibility String
+  documents String
+  applicationProcess String
+  officialSource String
+  lastVerified DateTime
+}
+
+model Reminder {
+  id Int @id @default(autoincrement())
+  patientId Int
+  type String
+  title String
+  dueAt DateTime
+  done Boolean @default(false)
+  patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade)
+  @@index([patientId,dueAt])
+}
+
+model Vaccination {
+  id Int @id @default(autoincrement())
+  patientId Int
+  vaccine String
+  dose String?
+  givenAt DateTime?
+  patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade)
+}
+
+model EmergencyRequest {
+  id Int @id @default(autoincrement())
+  patientId Int?
+  latitude Float?
+  longitude Float?
+  status EmergencyStatus @default(ACTIVE)
+  notes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  patient Patient? @relation(fields:[patientId],references:[id])
+  @@index([status,createdAt])
+}
+
+model Notification {
+  id Int @id @default(autoincrement())
+  userId Int
+  title String
+  body String
+  read Boolean @default(false)
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+}
+
+model OfflineSync {
+  id Int @id @default(autoincrement())
+  userId Int
+  operationType String
+  payload Json
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  syncedAt DateTime?
+}
+
+model HealthAwareness {
+  id Int @id @default(autoincrement())
+  title String
+  category String
+  content String
+  language String @default("en")
+  published Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id Int @id @default(autoincrement())
+  userId Int?
+  action String
+  entity String
+  entityId String?
+  details Json?
+  createdAt DateTime @default(now())
+  user User? @relation(fields:[userId],references:[id])
+}
+
+model Referral {
+  id Int @id @default(autoincrement())
+  patientId Int
+  referringPhcId Int?
+  receivingPhcId Int?
+  referringDoctorId Int?
+  reason String
+  urgency Urgency @default(MEDIUM)
+  createdAt DateTime @default(now())
+  expectedBy DateTime?
+  acceptedAt DateTime?
+  arrivedAt DateTime?
+  completedAt DateTime?
+  status ReferralStatus @default(CREATED)
+  notes String?
+  patient Patient @relation(fields:[patientId],references:[id],onDelete:Cascade)
+  referringPhc PHC? @relation("referringPhc",fields:[referringPhcId],references:[id])
+  receivingPhc PHC? @relation("receivingPhc",fields:[receivingPhcId],references:[id])
+  referringDoctor Doctor? @relation(fields:[referringDoctorId],references:[id])
+  @@index([status,expectedBy])
+}
